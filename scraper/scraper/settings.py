@@ -67,6 +67,11 @@ ROBOTSTXT_OBEY = True
 #ITEM_PIPELINES = {
 #    'scraper.pipelines.ScraperPipeline': 300,
 #}
+# Image pipeline
+ITEM_PIPELINES = {'scrapy.pipelines.images.ImagePipeline': 1}
+# Image directory
+IMAGES_STORE = '/images'
+
 
 # Enable and configure the AutoThrottle extension (disabled by default)
 # See https://docs.scrapy.org/en/latest/topics/autothrottle.html
