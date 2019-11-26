@@ -5,6 +5,8 @@ and discriminative model.
 import torch
 import torch.nn.functional as F
 
+### Residual Blocks ###
+
 class ResBlockG(torch.nn.Module):
     """
     Base residual block for the generator.
@@ -107,3 +109,17 @@ class ResBlockD(torch.nn.Module):
         out = out + skip
 
         return out
+
+### Misc ###
+
+class Aggregate(torch.nn.Module):
+    """
+    Aggregation module, similar to a Transformer layer.
+    """
+    def __init__(self, arg):
+        super(Aggregate, self).__init__()
+
+        # define nets to compute keys and queries, values are the input.
+
+    def forward(self, f_map):
+        return 
