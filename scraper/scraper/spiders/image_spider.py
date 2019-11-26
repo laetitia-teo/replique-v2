@@ -5,10 +5,12 @@ website, and one for pinterest.
 
 import scrapy
 
+# from myitems import ImageItem
+
 class IStockSpider(scrapy.Spider):
     name = 'iStock'
     start_urls = [
-        'https://www.istockphoto.com/fr/photos/naked-man?page=2&phrase=naked%20man&sort=mostpopular',
+        'https://www.istockphoto.com/fr/photos/naked-woman?istockcollection=&mediatype=photography&phrase=naked%20woman&sort=mostpopular',
         ]
 
     def __init__(self):
@@ -16,9 +18,13 @@ class IStockSpider(scrapy.Spider):
 
     def parse(self, response):
         self.count += 1
+        items = []
         # get links of images
         for link in response.css('img.gallery-asset__thumb::attr(src)'):
-            yield {'image_urls': link.get()}
+            yield {'image_urls': [link.get()]}
+            # item = ImageItem()
+            # item['image_urls'] = link.get()
+            # items.append(item)
 
         # follow pagination links
         for href in response.css(

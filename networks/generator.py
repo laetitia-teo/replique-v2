@@ -6,6 +6,8 @@ It is based on a masked version of the Spatial Broadcast Decoder.
 import numpy as np
 import torch
 
+
+
 class Generator(torch.nn.Module):
     """
     Based on the Spatial Broadcast Decoder.

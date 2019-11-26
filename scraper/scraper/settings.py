@@ -70,7 +70,7 @@ ROBOTSTXT_OBEY = True
 # Image pipeline
 ITEM_PIPELINES = {'scrapy.pipelines.images.ImagesPipeline': 1}
 # Image directory
-IMAGES_STORE = '~/Documents/workspace/replique-v2/scraper/images'
+IMAGES_STORE = 'images'
 
 
 # Enable and configure the AutoThrottle extension (disabled by default)
