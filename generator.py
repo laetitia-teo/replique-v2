@@ -31,6 +31,7 @@ class Generator(torch.nn.Module):
         block_list = []
         for in_ch, h, out_ch in channels:
             block_list.append(ResBlockG(in_ch, h. out_ch))
+        block_list.append(torch.nn.Tanh()) # check this works
 
         self.convnet = torch.nn.Sequential(*block_list)
 
@@ -62,7 +63,7 @@ class Generator(torch.nn.Module):
         x /= w * fill
         f_map = torch.cat((f_map, y, x, img, mask), -1) # check this
         # process feature map with convnet
-        f_map = self.convnet(f_map)
+        f_map = self.convnet(f_map) # change
         # mix final image with the mask
         f_map = f_map * mask + img
         return f_map

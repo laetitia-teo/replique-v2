@@ -36,7 +36,7 @@ class ResBlockG(torch.nn.Module):
         self.batchnorm3 = torch.nn.BatchNorm2d(h)
         self.batchnorm4 = torch.nn.BatchNorm2d(h)
 
-    def forward(self, fmap):
+    def forward(self, f_map):
         # convolutional path
         out = self.batchnorm1(f_map)
         out = F.relu(out)
@@ -82,6 +82,8 @@ class ResBlockD(torch.nn.Module):
 
         self.conv5 = torch.nn.Conv2d(in_ch, self.add_ch, 1)
 
+        self.avgpool = torch.nn.AvgPool2d(2)
+
     def forward(self, f_map):
         """
         Forward pass.
@@ -99,11 +101,15 @@ class ResBlockD(torch.nn.Module):
         out = self.conv3(out)
         out = F.relu(out)
 
+        # average pooling
+        out = self.avgpool(out)
+
         # change again number of convolutions
         out = self.conv4(out)
 
         # skip connexion
-        add = self.conv5(f_map)
+        add = self.avgpool(f_map)
+        add = self.conv5(add)
         skip = torch.cat([f_map, add], -1)
 
         out = out + skip
@@ -112,14 +118,31 @@ class ResBlockD(torch.nn.Module):
 
 ### Misc ###
 
-class Aggregate(torch.nn.Module):
-    """
-    Aggregation module, similar to a Transformer layer.
-    """
-    def __init__(self, arg):
-        super(Aggregate, self).__init__()
+def mlp_fn(layer_list):
+    layers = []
+    def mlp(f_in, f_out):
+        f1 = f_in
+        for f in layer_list:
+            layers.append(torch.nn.Linear(f1, f))
+            layers.append(torch.nn.ReLU())
+            f1 = f
+        layers.append(torch.nn.Linear(f1, f_out))\
+        return torch.nn.Sequential(*layers)
+    return mlp
 
-        # define nets to compute keys and queries, values are the input.
+class AggBlock(torch.nn.Module):
+    """
+    Aggregation block.
+
+    No learnable parameters, we simply use the last feature of the feature map
+    as a weight to average all the stuff.
+    """
+    def __init__(self):
+        super(AggBlock, self).__init__()
 
     def forward(self, f_map):
-        return 
+        # make sure all this works
+        a_map = F.sigmoid(f_map[..., -1])
+        denom = torch.sum(a_map, (1, 2))
+        f_map = torch.sum(f_map[..., :-1] * a_map, (1, 2))
+        return f_map / denom
