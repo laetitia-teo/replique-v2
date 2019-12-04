@@ -24,12 +24,10 @@ class ResBlockG(torch.nn.Module):
         """
         super(ResBlockG, self).__init__()
         # number of channels to drop in skip connexion
-        self.drop_ch = in_ch - out_ch
-
-        self.conv1 = torcn.nn.Conv2d(in_ch, h, 1)
-        self.conv2 = torch.nn.Conv2d(h, h, 3)
-        self.conv3 = torch.nn.Conv2d(h, h, 3)
-        self.conv4 = torcn.nn.Conv2d(h, out_ch, 1)
+        self.conv1 = torch.nn.Conv2d(in_ch, h, 1)
+        self.conv2 = torch.nn.Conv2d(h, h, 3, padding=1)
+        self.conv3 = torch.nn.Conv2d(h, h, 3, padding=1)
+        self.conv4 = torch.nn.Conv2d(h, out_ch, 1)
 
         self.batchnorm1 = torch.nn.BatchNorm2d(in_ch)
         self.batchnorm2 = torch.nn.BatchNorm2d(h)
@@ -60,7 +58,7 @@ class ResBlockG(torch.nn.Module):
         out = self.conv4(out)
 
         # skip connexion
-        skip = fmap[..., :self.drop_ch]
+        skip = f_map[:, :out.shape[1], ...]
 
         out = out + skip
 
@@ -75,10 +73,10 @@ class ResBlockD(torch.nn.Module):
 
         self.add_ch = out_ch - in_ch
 
-        self.conv1 = torcn.nn.Conv2d(in_ch, h, 1)
+        self.conv1 = torch.nn.Conv2d(in_ch, h, 1)
         self.conv2 = torch.nn.Conv2d(h, h, 3)
         self.conv3 = torch.nn.Conv2d(h, h, 3)
-        self.conv4 = torcn.nn.Conv2d(h, out, 1)
+        self.conv4 = torch.nn.Conv2d(h, out, 1)
 
         self.conv5 = torch.nn.Conv2d(in_ch, self.add_ch, 1)
 
@@ -110,7 +108,7 @@ class ResBlockD(torch.nn.Module):
         # skip connexion
         add = self.avgpool(f_map)
         add = self.conv5(add)
-        skip = torch.cat([f_map, add], -1)
+        skip = torch.cat([f_map, add], 1)
 
         out = out + skip
 
@@ -126,7 +124,7 @@ def mlp_fn(layer_list):
             layers.append(torch.nn.Linear(f1, f))
             layers.append(torch.nn.ReLU())
             f1 = f
-        layers.append(torch.nn.Linear(f1, f_out))\
+        layers.append(torch.nn.Linear(f1, f_out))
         return torch.nn.Sequential(*layers)
     return mlp
 
@@ -142,7 +140,44 @@ class AggBlock(torch.nn.Module):
 
     def forward(self, f_map):
         # make sure all this works
-        a_map = F.sigmoid(f_map[..., -1])
-        denom = torch.sum(a_map, (1, 2))
-        f_map = torch.sum(f_map[..., :-1] * a_map, (1, 2))
+        a_map = F.sigmoid(f_map[:, -1, ...])
+        denom = torch.sum(a_map, (2, 3))
+        f_map = torch.sum(f_map[:, :-1, ...] * a_map, (2, 3))
         return f_map / denom
+
+### Full Nets ###
+
+class GeneratorConv(torch.nn.Module):
+    """
+    This class defines the conv net used in the generator.
+    The net is not a simple sequential stacking of the residual blocks : in 
+    addition to this we also need to feed the image (and mask ?) information
+    at the beginning of each residual block (+4 dimensions).
+    """
+    def __init__(self, feature_list):
+        """
+        Takes as input the list of tuples defining the inputs to the residual
+        block constructor.
+        """
+        super(GeneratorConv, self).__init__()
+        for i, (in_ch, h, out_ch) in enumerate(feature_list):
+            # if i == 0:
+            #     # TODO : change this
+            #     in_ch += 2
+            self.__dict__['block' + str(i)] = ResBlockG(in_ch + 6, h, out_ch)
+        self.N = len(feature_list)
+
+    def forward(self, inpt, img, mask, x, y):
+        """
+        X and Y info are already in the input.
+        """
+        out = inpt
+        for i in range(self.N):
+            # we concatenate, in the channel dim, image and mask info
+            print(out.shape)
+            print(img.shape)
+            print(mask.shape)
+            out = self.__dict__['block' + str(i)](
+                torch.cat((out, img, mask, x, y), 1))
+        out = torch.tanh(out)
+        return out

@@ -5,22 +5,26 @@ It is based on a masked version of the Spatial Broadcast Decoder.
 """
 import numpy as np
 import torch
+import matplotlib.pyplot as plt
 
-from blocks import ResBlockG
+from blocks import ResBlockG, GeneratorConv
 
 class Generator(torch.nn.Module):
     """
     Based on the Spatial Broadcast Decoder.
     """
     def __init__(self, zdim):
+        super(Generator, self).__init__()
         self.zdim = zdim
 
         # define convnets
         # this is an example, refine this, too many channels I think
         channels = [
-            (self.zdim, 64, 128),
-            (128, 64, 128),
-            (128, 64, 64),
+            (self.zdim, 64, 64),
+            (64, 64, 64),
+            (64, 64, 64),
+            (64, 64, 64),
+            (64, 64, 64),
             (64, 32, 64),
             (64, 32, 32),
             (32, 16, 16),
@@ -28,14 +32,9 @@ class Generator(torch.nn.Module):
             (8, 8, 4),
             (4, 4, 3)]
 
-        block_list = []
-        for in_ch, h, out_ch in channels:
-            block_list.append(ResBlockG(in_ch, h. out_ch))
-        block_list.append(torch.nn.Tanh()) # check this works
+        self.convnet = GeneratorConv(channels)
 
-        self.convnet = torch.nn.Sequential(*block_list)
-
-    def forward(z, img, mask):
+    def forward(self, z, img, mask):
         """
         Forward pass. Do we pass the random vector as input or do we generate
         it inside the function ? 
@@ -51,19 +50,50 @@ class Generator(torch.nn.Module):
             - img : masked image
             - mask : do we need this info in the feature map ?
         """
-        n, h, w, c = img.shape
+        n, c, h, w = img.shape
         # tile the z vector everywhere
-        f_map = torch.ones((n, h, w, self.zdim))
+        f_map = torch.ones((n, self.zdim, h, w))
         f_map *= z
         # x, y positions
-        y, x = torch.meshgrid(torch.arange(h), torch.arange(w))
-        fill = torch.ones((n, h, w, 1))
-        # we may need to add a dimension for batch here
-        y /= h * fill
-        x /= w * fill
-        f_map = torch.cat((f_map, y, x, img, mask), -1) # check this
+        y, x = torch.meshgrid(
+            torch.arange(h, dtype=torch.float),
+            torch.arange(w, dtype=torch.float))
+        fill = torch.ones((n, 1, h, w))
+        y = y / h
+        x = x / w
+        # add a dimension for batch
+        y = y.unsqueeze(0) * torch.ones((n, 1, 1))
+        x = x.unsqueeze(0) * torch.ones((n, 1, 1))
+        y = y.unsqueeze(1)
+        x = x.unsqueeze(1)
+        print(f_map.shape)
+        # f_map = torch.cat((f_map), 1) # should work
+        print(f_map.shape)
+        print(img.shape)
+        print(mask.shape)
         # process feature map with convnet
-        f_map = self.convnet(f_map) # change
+        f_map = self.convnet(f_map, img, mask, x, y) # change
+        f_map = (f_map + 1) * 127.5
         # mix final image with the mask
         f_map = f_map * mask + img
         return f_map
+
+### Testing ###
+
+from maskmaker import MaskMaker
+
+m = MaskMaker(2)
+mi, i, mask = m.make_one('image.jpg')
+mi = torch.tensor(np.expand_dims(mi, 0), dtype=torch.float)
+i = torch.tensor(np.expand_dims(i, 0), dtype=torch.float)
+mask = torch.tensor(np.expand_dims(mask, 0), dtype=torch.float)
+mask = mask.unsqueeze(0)
+mi = mi.permute(0, 3, 1, 2)
+i = i.permute(0, 3, 1, 2)
+mask = mask.permute(0, 1, 2, 3)
+gen = Generator(100)
+z = torch.rand((1, 100, 1, 1))
+img = gen(z, mi, mask)
+img = img[0]
+img = img.permute(1, 2, 0)
+img = img.detach().numpy().astype(int)

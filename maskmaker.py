@@ -32,6 +32,9 @@ def window(dims=None, center=None, R=None, L=None):
 
     This function is not perfect, needs some form of antialiasing on 
     circle delimitation to get rid of artifacts.
+
+    TODO : change this, its too slow. replace with clipping a function in 2d
+    space, or something like that.
     """
     if dims is None:
         # convention : x dimension comes first
@@ -44,7 +47,7 @@ def window(dims=None, center=None, R=None, L=None):
         R = 20
     if L is None:
         L = 10
-    x, y = np.meshgrid(np.arange(w), np.arange(h))
+    x, y = np.meshgrid(np.arange(h), np.arange(w))
     # center our coordinates
     x -= center[0]
     y -= center[1]
@@ -53,6 +56,9 @@ def window(dims=None, center=None, R=None, L=None):
     grid = np.zeros((w, h))
     hardmask = np.zeros((w, h))
     # add plateau
+    print(x.shape)
+    print(y.shape)
+    print(R)
     grid += np.less_equal(x**2 + y**2, R**2)
     hardmask += np.less_equal(x**2 + y**2, R**2)
     for p in range(L):
@@ -170,8 +176,6 @@ class SnakeTree():
     def __init__(self, img):
         self.img = img
 
-    def 
-
 class MaskMaker():
     """
     The maskmaker class.
@@ -194,20 +198,35 @@ class MaskMaker():
     def sample_two(self):
         params = []
         for i in range(2):
-            vec = np.clip(np.random.normal(4), -1, 1)
+            means = np.zeros(4)
+            vec = (np.clip(np.random.normal(means), -1, 1) + 1) / 2
             vec /= 2
             vec += .5
             params.append(vec)
         return params
 
     def make_one(self, path):
+        # ugliest code :(
         img = Image.open(path)
-        img.show()
         img = np.array(img)
-        params = self.sample_two()
+        img = np.swapaxes(img, 0, 1)
+        w, h = img.shape[:-1]
+        diag = (h**2 + w**2)**.5
+        param_list = self.sample_two()
+        new_params = []
+        for vec in param_list:
+            x = int(vec[0] * w)
+            y = int(vec[1] * h)
+            R = int(vec[2] * diag / 4)
+            L = int(vec[3] * diag / 8)
+            new_params.append(((x, y), R, L))
+        mask, _ = several_windows((w, h), new_params)
+        inverse_mask = 1 - mask
+        masked = img * np.expand_dims(inverse_mask, -1)
+        return masked, img, mask
 
 m = MaskMaker(2)
-paramlist = [((25, 25), 45, 5), ((75, 10), 10, 50)]
-mg, hm = m.several_windows((100, 100), paramlist)
-plt.matshow(mg)
-plt.show()
+# paramlist = [((25, 25), 45, 5), ((75, 10), 10, 50)]
+# mg, hm = several_windows((100, 100), paramlist)
+# plt.matshow(mg)
+# plt.show()
