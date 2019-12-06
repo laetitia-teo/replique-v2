@@ -7,6 +7,8 @@ import numpy as np
 import torch
 import matplotlib.pyplot as plt
 
+import utils as ut
+
 from blocks import ResBlockG, GeneratorConv
 
 class Generator(torch.nn.Module):
@@ -25,12 +27,13 @@ class Generator(torch.nn.Module):
             (64, 64, 64),
             (64, 64, 64),
             (64, 64, 64),
+            (64, 64, 64),
+            (64, 64, 64),
+            (64, 64, 64),
+            (64, 64, 64),
             (64, 32, 64),
             (64, 32, 32),
-            (32, 16, 16),
-            (16, 8, 8),
-            (8, 8, 4),
-            (4, 4, 3)]
+            (32, 32, 3)]
 
         self.convnet = GeneratorConv(channels)
 
@@ -83,7 +86,7 @@ class Generator(torch.nn.Module):
 from maskmaker import MaskMaker
 
 m = MaskMaker(2)
-mi, i, mask = m.make_one('image.jpg')
+mi, i, mask = m.mask_all('images/tests/image.jpg')
 mi = torch.tensor(np.expand_dims(mi, 0), dtype=torch.float)
 i = torch.tensor(np.expand_dims(i, 0), dtype=torch.float)
 mask = torch.tensor(np.expand_dims(mask, 0), dtype=torch.float)
@@ -92,8 +95,8 @@ mi = mi.permute(0, 3, 1, 2)
 i = i.permute(0, 3, 1, 2)
 mask = mask.permute(0, 1, 2, 3)
 gen = Generator(100)
-z = torch.rand((1, 100, 1, 1))
+z = torch.rand((1, 100, 1, 1)) / 2
+# z = i.float() / 255
 img = gen(z, mi, mask)
-img = img[0]
-img = img.permute(1, 2, 0)
-img = img.detach().numpy().astype(int)
+print('final')
+ut.plot_tensor_image(img)

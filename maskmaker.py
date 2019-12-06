@@ -197,7 +197,7 @@ class MaskMaker():
 
     def sample_two(self):
         params = []
-        for i in range(2):
+        for i in range(1):
             means = np.zeros(4)
             vec = (np.clip(np.random.normal(means), -1, 1) + 1) / 2
             vec /= 2
@@ -221,6 +221,16 @@ class MaskMaker():
             L = int(vec[3] * diag / 8)
             new_params.append(((x, y), R, L))
         mask, _ = several_windows((w, h), new_params)
+        inverse_mask = 1 - mask
+        masked = img * np.expand_dims(inverse_mask, -1)
+        return masked, img, mask
+
+    def mask_all(self, path):
+        img = Image.open(path)
+        img = np.array(img)
+        img = np.swapaxes(img, 0, 1)
+        w, h = img.shape[:-1]
+        mask = np.ones((w, h))
         inverse_mask = 1 - mask
         masked = img * np.expand_dims(inverse_mask, -1)
         return masked, img, mask

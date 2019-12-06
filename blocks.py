@@ -5,6 +5,8 @@ and discriminative model.
 import torch
 import torch.nn.functional as F
 
+import utils as ut
+
 ### Residual Blocks ###
 
 class ResBlockG(torch.nn.Module):
@@ -24,6 +26,8 @@ class ResBlockG(torch.nn.Module):
         """
         super(ResBlockG, self).__init__()
         # number of channels to drop in skip connexion
+        self.ch_diff = out_ch - in_ch
+
         self.conv1 = torch.nn.Conv2d(in_ch, h, 1)
         self.conv2 = torch.nn.Conv2d(h, h, 3, padding=1)
         self.conv3 = torch.nn.Conv2d(h, h, 3, padding=1)
@@ -34,10 +38,14 @@ class ResBlockG(torch.nn.Module):
         self.batchnorm3 = torch.nn.BatchNorm2d(h)
         self.batchnorm4 = torch.nn.BatchNorm2d(h)
 
+        if self.ch_diff > 0:
+            self.cast = torch.nn.Conv2d(in_ch, self.ch_diff, 1)
+
     def forward(self, f_map):
         # convolutional path
-        out = self.batchnorm1(f_map)
-        out = F.relu(out)
+        # out = self.batchnorm1(f_map)
+        out = F.relu(f_map)
+        # out = F.tanh(out)
 
         # change the number of channels
         out = self.conv1(out)
@@ -58,7 +66,10 @@ class ResBlockG(torch.nn.Module):
         out = self.conv4(out)
 
         # skip connexion
-        skip = f_map[:, :out.shape[1], ...]
+        if self.ch_diff <= 0:
+            skip = f_map[:, :out.shape[1], ...]
+        else:
+            skip = torch.cat([f_map, self.cast(f_map)], 1)
 
         out = out + skip
 
@@ -174,9 +185,8 @@ class GeneratorConv(torch.nn.Module):
         out = inpt
         for i in range(self.N):
             # we concatenate, in the channel dim, image and mask info
-            print(out.shape)
-            print(img.shape)
-            print(mask.shape)
+            # print('block %s' % i)
+            ut.plot_tensor_image(out, float)
             out = self.__dict__['block' + str(i)](
                 torch.cat((out, img, mask, x, y), 1))
         out = torch.tanh(out)
