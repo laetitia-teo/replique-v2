@@ -178,7 +178,7 @@ class GeneratorConv(torch.nn.Module):
             self.__dict__['block' + str(i)] = ResBlockG(in_ch + 6, h, out_ch)
         self.N = len(feature_list)
 
-    def forward(self, inpt, img, mask, x, y):
+    def forward(self, inpt, img, x, y):
         """
         X and Y info are already in the input.
         """
@@ -186,8 +186,8 @@ class GeneratorConv(torch.nn.Module):
         for i in range(self.N):
             # we concatenate, in the channel dim, image and mask info
             # print('block %s' % i)
-            ut.plot_tensor_image(out, float)
+            # ut.plot_tensor_image(out, float)
             out = self.__dict__['block' + str(i)](
-                torch.cat((out, img, mask, x, y), 1))
+                torch.cat((out, img, x, y), 1))
         out = torch.tanh(out)
         return out

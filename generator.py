@@ -9,6 +9,8 @@ import matplotlib.pyplot as plt
 
 import utils as ut
 
+from torchvision.datasets import ImageFolder
+from maskmaker import mask_transform
 from blocks import ResBlockG, GeneratorConv
 
 class Generator(torch.nn.Module):
@@ -37,7 +39,7 @@ class Generator(torch.nn.Module):
 
         self.convnet = GeneratorConv(channels)
 
-    def forward(self, z, img, mask):
+    def forward(self, z, img):
         """
         Forward pass. Do we pass the random vector as input or do we generate
         it inside the function ? 
@@ -50,8 +52,7 @@ class Generator(torch.nn.Module):
 
         Arguments :
             - z : random vector for the generator
-            - img : masked image
-            - mask : do we need this info in the feature map ?
+            - img : masked image concatenated with the mask
         """
         n, c, h, w = img.shape
         # tile the z vector everywhere
@@ -73,30 +74,40 @@ class Generator(torch.nn.Module):
         # f_map = torch.cat((f_map), 1) # should work
         print(f_map.shape)
         print(img.shape)
-        print(mask.shape)
         # process feature map with convnet
-        f_map = self.convnet(f_map, img, mask, x, y) # change
+        f_map = self.convnet(f_map, img, x, y)
         f_map = (f_map + 1) * 127.5
         # mix final image with the mask
-        f_map = f_map * mask + img
+        mask = img[:, -1, ...]
+        f_map = f_map * mask + img[:, :-1, ...] * 255
         return f_map
 
 ### Testing ###
 
 from maskmaker import MaskMaker
 
-m = MaskMaker(2)
-mi, i, mask = m.mask_all('images/tests/image.jpg')
-mi = torch.tensor(np.expand_dims(mi, 0), dtype=torch.float)
-i = torch.tensor(np.expand_dims(i, 0), dtype=torch.float)
-mask = torch.tensor(np.expand_dims(mask, 0), dtype=torch.float)
-mask = mask.unsqueeze(0)
-mi = mi.permute(0, 3, 1, 2)
-i = i.permute(0, 3, 1, 2)
-mask = mask.permute(0, 1, 2, 3)
-gen = Generator(100)
-z = torch.rand((1, 100, 1, 1)) / 2
-# z = i.float() / 255
-img = gen(z, mi, mask)
-print('final')
-ut.plot_tensor_image(img)
+# m = MaskMaker(2)
+# mi, i, mask = m.mask_all('images/tests/image.jpg')
+# mi = torch.tensor(np.expand_dims(mi, 0), dtype=torch.float)
+# i = torch.tensor(np.expand_dims(i, 0), dtype=torch.float)
+# mask = torch.tensor(np.expand_dims(mask, 0), dtype=torch.float)
+# mask = mask.unsqueeze(0)
+# mi = mi.permute(0, 3, 1, 2)
+# i = i.permute(0, 3, 1, 2)
+# mask = mask.permute(0, 1, 2, 3)
+# gen = Generator(100)
+# z = torch.rand((1, 100, 1, 1)) / 2
+# # z = i.float() / 255
+# img = gen(z, mi, mask)
+# print('final')
+# ut.plot_tensor_image(img)
+def run():
+    imf = ImageFolder('data/images', mask_transform)
+    t = imf[2][0].unsqueeze(0)
+    z = torch.rand((1, 100, 1, 1))
+    gen = Generator(100)
+    gen.cuda()
+    t.cuda()
+    z.cuda()
+    img = gen(z, t)
+    ut.plot_tensor_image(img)

@@ -21,9 +21,13 @@ import os.path as op
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
+import torch
+import torchvision.transforms.functional as TF
 
 from PIL import Image
 from glob import glob
+
+SIZE = (612, 612)
 
 def window(dims=None, center=None, R=None, L=None):
     """
@@ -71,6 +75,23 @@ def window(dims=None, center=None, R=None, L=None):
         grid += add
     return grid, hardmask
 
+def windowv2(dims, center, sigma, thresh):
+    """
+    New method for making a window.
+    First we create a Gaussian centered on the provided center with the
+    provided standard deviation. Then we clamp this gaussian at the provided
+    threshold, and cast this to the (0-1) range.
+    """
+    w, h = dims
+    x, y = np.meshgrid(np.arange(h), np.arange(w))
+    x -= center[0]
+    y -= center[1]
+    grid = np.exp(- 2 * (x**2 + y**2)**0.5 / sigma)
+    grid = np.clip(grid, 0, thresh)
+    f = lambda x: (1 - np.cos(np.pi * x / thresh))/2
+    grid = f(grid)
+    return grid
+
 def several_windows(dims, param_list):
     """
     Makes several windows from the parameters specified in the list.
@@ -82,14 +103,36 @@ def several_windows(dims, param_list):
     eps = 10e-8
     f = lambda x: 1 + np.tan(np.pi * x / (4 + eps))
     for params in param_list:
-        center, R, L = params
-        grid, hardmask = window(dims, center, R, L)
+        grid = windowv2(*params)
         p = f(main_grid + grid)
         main_grid = (main_grid**p + grid**p)**(1/p)
         main_grid[main_grid > 1] = 1
-        main_hardmask += hardmask
-        main_hardmask = (main_hardmask == 1).astype(float) # check this works
-    return main_grid, main_hardmask
+    return main_grid
+
+def sample_params(dims):
+    # height and width are the same :
+    center = np.random.randint(0, dims[0], 2)
+    sigma = np.random.randint(100, 300)
+    thresh = np.random.random()
+    return (dims, center, sigma, thresh)
+
+def mask_transform(img):
+    """
+    Input is PIL image.
+    Output is torch.Tensor
+    """
+    img = TF.resize(img, SIZE)
+    params = []
+    for _ in range(2):
+        params.append(sample_params(img.size))
+    # mask = np.zeros(SIZE)
+    mask = several_windows(SIZE, params)
+    t = TF.to_tensor(img)
+    mask = torch.Tensor(mask).unsqueeze(0)
+    t = t * (1 - mask)
+    t = torch.cat((t, mask), 0)
+    return t
+
 
 class Node():
     """
@@ -129,7 +172,7 @@ class Node():
             dims = mask.shape
             # percentage of the grid covered by the mask
             p = np.sum(mask) / (dims[0] * dims[1]) 
-            p = (2 * p)**2 
+            p = (2 * p)**2 # ?
             if p > 1:
                 p = 1
             stop = np.random.binomial(1, p)
@@ -205,21 +248,31 @@ class MaskMaker():
             params.append(vec)
         return params
 
+    def sample_params(self, dims):
+        # height and width are the same :
+        center = np.random.randint(0, dims[0], 2)
+        sigma = np.random.randint(100, 300)
+        thresh = np.random.random()
+        return (dims, center, sigma, thresh)
+
+    # def mask_transform()
+
     def make_one(self, path):
         # ugliest code :(
         img = Image.open(path)
         img = np.array(img)
         img = np.swapaxes(img, 0, 1)
-        w, h = img.shape[:-1]
-        diag = (h**2 + w**2)**.5
-        param_list = self.sample_two()
-        new_params = []
-        for vec in param_list:
-            x = int(vec[0] * w)
-            y = int(vec[1] * h)
-            R = int(vec[2] * diag / 4)
-            L = int(vec[3] * diag / 8)
-            new_params.append(((x, y), R, L))
+        dims = img.shape[:-1]
+
+        # diag = (h**2 + w**2)**.5
+        # param_list = self.sample_two()
+        # new_params = []
+        # for vec in param_list:
+        #     x = int(vec[0] * w)
+        #     y = int(vec[1] * h)
+        #     R = int(vec[2] * diag / 4)
+        #     L = int(vec[3] * diag / 8)
+        #     new_params.append(((x, y), R, L))
         mask, _ = several_windows((w, h), new_params)
         inverse_mask = 1 - mask
         masked = img * np.expand_dims(inverse_mask, -1)
