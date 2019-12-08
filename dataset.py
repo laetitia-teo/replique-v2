@@ -13,10 +13,7 @@ from torchvision.datasets import ImageFolder
 
 max_size = (612, 612)
 
-def custom_transform(img):
-    img = TF.resize(img, max_size)
-    return TF.to_tensor(img)
-    return img
+
 
 # class ImageDataset(ImageFolder):
 #     def __init__(self, root):

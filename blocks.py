@@ -5,6 +5,8 @@ and discriminative model.
 import torch
 import torch.nn.functional as F
 
+from torch.nn import ModuleList
+
 import utils as ut
 
 ### Residual Blocks ###
@@ -79,19 +81,22 @@ class ResBlockD(torch.nn.Module):
     """
     Residual block for the discriminator.
     """
-    def __init__(self, in_ch, h, out_ch):
+    def __init__(self, in_ch, h, out_ch, downsample=False):
         super(ResBlockD, self).__init__()
 
-        self.add_ch = out_ch - in_ch
+        self.downsample = downsample
+        self.ch_diff = out_ch - in_ch
 
         self.conv1 = torch.nn.Conv2d(in_ch, h, 1)
-        self.conv2 = torch.nn.Conv2d(h, h, 3)
-        self.conv3 = torch.nn.Conv2d(h, h, 3)
-        self.conv4 = torch.nn.Conv2d(h, out, 1)
+        self.conv2 = torch.nn.Conv2d(h, h, 3, padding=1)
+        self.conv3 = torch.nn.Conv2d(h, h, 3, padding=1)
+        self.conv4 = torch.nn.Conv2d(h, out_ch, 1)
 
-        self.conv5 = torch.nn.Conv2d(in_ch, self.add_ch, 1)
+        if self.ch_diff > 0:
+            self.conv5 = torch.nn.Conv2d(in_ch, self.ch_diff, 1)
 
-        self.avgpool = torch.nn.AvgPool2d(2)
+        if self.downsample:
+            self.avgpool = torch.nn.AvgPool2d(2)
 
     def forward(self, f_map):
         """
@@ -111,17 +116,22 @@ class ResBlockD(torch.nn.Module):
         out = F.relu(out)
 
         # average pooling
-        out = self.avgpool(out)
+        if self.downsample:
+            out = self.avgpool(out)
 
         # change again number of convolutions
         out = self.conv4(out)
 
         # skip connexion
-        add = self.avgpool(f_map)
-        add = self.conv5(add)
-        skip = torch.cat([f_map, add], 1)
+        if self.downsample:
+            add = self.avgpool(f_map)
+        else:
+            add = f_map
+        if self.ch_diff > 0:
+            add2 = self.conv5(add)
+            add = torch.cat([add, add2], 1)
 
-        out = out + skip
+        out = out + add
 
         return out
 
@@ -151,9 +161,32 @@ class AggBlock(torch.nn.Module):
 
     def forward(self, f_map):
         # make sure all this works
-        a_map = F.sigmoid(f_map[:, -1, ...])
+        a_map = torch.sigmoid(f_map[:, -1, ...])
         denom = torch.sum(a_map, (2, 3))
         f_map = torch.sum(f_map[:, :-1, ...] * a_map, (2, 3))
+        return f_map / denom
+
+class AggBlockv2(torch.nn.Module):
+    """
+    Second version of the aggregation block.
+    In this vesion we perform 1d conv on all vectors of the feature map to
+    predict an attention map used as weights in the mean.
+
+    We also use spatial (x, y) information as input to the aggregation
+    convolution.
+    """
+    def __init__(self, in_ch):
+        super(AggBlockv2, self).__init__()
+
+        self.conv = torch.nn.Conv2d(in_ch + 2, 1, 1)
+
+    def forward(self, f_map):
+        n, c, h, w = f_map.shape
+        y, x = ut.make_yx(h, w, n)
+        f_map2 = torch.cat((f_map, x, y), 1)
+        a_map = torch.sigmoid(self.conv(f_map2))
+        denom = torch.sum(a_map, (2, 3))
+        f_map = torch.sum(f_map * a_map, (2, 3))
         return f_map / denom
 
 ### Full Nets ###
@@ -171,23 +204,30 @@ class GeneratorConv(torch.nn.Module):
         block constructor.
         """
         super(GeneratorConv, self).__init__()
-        for i, (in_ch, h, out_ch) in enumerate(feature_list):
-            # if i == 0:
-            #     # TODO : change this
-            #     in_ch += 2
-            self.__dict__['block' + str(i)] = ResBlockG(in_ch + 6, h, out_ch)
-        self.N = len(feature_list)
+        # for i, (in_ch, h, out_ch) in enumerate(feature_list):
+        #     # if i == 0:
+        #     #     # TODO : change this
+        #     #     in_ch += 2
+        #     self.__dict__['block' + str(i)] = ResBlockG(in_ch + 6, h, out_ch)
+        # use ModuleList
+        self.mlist = ModuleList(
+            [ResBlockG(in_ch + 6, h, out_ch) \
+                for in_ch, h, out_ch in feature_list])
+        # self.N = len(feature_list)
 
     def forward(self, inpt, img, x, y):
         """
         X and Y info are already in the input.
         """
         out = inpt
-        for i in range(self.N):
-            # we concatenate, in the channel dim, image and mask info
-            # print('block %s' % i)
-            # ut.plot_tensor_image(out, float)
-            out = self.__dict__['block' + str(i)](
-                torch.cat((out, img, x, y), 1))
+        # for i in range(self.N):
+        #     # we concatenate, in the channel dim, image and mask info
+        #     # print('block %s' % i)
+        #     # ut.plot_tensor_image(out, float)
+        #     out = self.__dict__['block' + str(i)](
+        #         torch.cat((out, img, x, y), 1))
+        for i, block in enumerate(self.mlist):
+            print(i)
+            out = block(torch.cat((out, img, x, y), 1))
         out = torch.tanh(out)
         return out

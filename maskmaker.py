@@ -133,6 +133,10 @@ def mask_transform(img):
     t = torch.cat((t, mask), 0)
     return t
 
+def regular_transform(img):
+    img = TF.resize(img, SIZE)
+    return TF.to_tensor(img)
+    return img
 
 class Node():
     """
