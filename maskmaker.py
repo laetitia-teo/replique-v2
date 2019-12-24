@@ -130,6 +130,7 @@ def mask_transform(img):
     t = TF.to_tensor(img)
     mask = torch.Tensor(mask).unsqueeze(0)
     t = t * (1 - mask)
+    # mask = torch.ones(mask.shape)
     t = torch.cat((t, mask), 0)
     return t
 
