@@ -13,8 +13,6 @@ from torchvision.datasets import ImageFolder
 
 max_size = (612, 612)
 
-
-
 # class ImageDataset(ImageFolder):
 #     def __init__(self, root):
 #         super(ImageDataset, self).__init__(root, transform)
