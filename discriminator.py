@@ -51,25 +51,28 @@ class Discriminator(torch.nn.Module):
     def forward(self, img):
         """
         Forward pass.
+
+        Returns probabilities.
         """
-        return self.convnet(img)
+        return torch.sigmoid(self.convnet(img))
 
-# test :
-from torchvision.datasets import ImageFolder
-from maskmaker import *
+if __name__ == '__main__':
+    # test :
+    from torchvision.datasets import ImageFolder
+    from maskmaker import *
 
-imf = ImageFolder('data/images', regular_transform)
-img = imf[2][0].unsqueeze(0)
-D = Discriminator()
-res = D(img)
+    imf = ImageFolder('data/images', regular_transform)
+    img = imf[2][0].unsqueeze(0)
+    D = Discriminator()
+    res = D(img)
 
-from generator import Generator
-imf = ImageFolder('data/images', mask_transform)
-t = imf[2][0].unsqueeze(0)
-z = torch.rand((1, 100, 1, 1))
-G = Generator(100)
-G.cuda()
-t = t.cuda()
-z = z.cuda()
-img = G(z, t).cpu()
-res = D(img)
+    from generator import Generator
+    imf = ImageFolder('data/images', mask_transform)
+    t = imf[2][0].unsqueeze(0)
+    z = torch.rand((1, 100, 1, 1))
+    G = Generator(100)
+    G.cuda()
+    t = t.cuda()
+    z = z.cuda()
+    img = G(z, t).cpu()
+    res = D(img)

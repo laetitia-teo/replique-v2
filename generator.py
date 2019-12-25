@@ -67,7 +67,7 @@ class Generator(torch.nn.Module):
         print(img.shape)
         # process feature map with convnet
         f_map = self.convnet(f_map, img, x, y)
-        f_map = (f_map + 1) * 0.5
+        f_map = (f_map + 1) * 0.5 # map to (0, 1) range
         # mix final image with the mask
         mask = img[:, -1, ...]
         f_map = f_map * mask + img[:, :-1, ...]
