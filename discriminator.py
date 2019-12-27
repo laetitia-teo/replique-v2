@@ -19,6 +19,7 @@ class Discriminator(torch.nn.Module):
             - dim (int) : dimension of the last vector, before mlp.
         """
         super(Discriminator, self).__init__()
+        self.GPU = False
         # define convnets
         # this is random, tune it please
         channels = [

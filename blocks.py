@@ -182,7 +182,7 @@ class AggBlockv2(torch.nn.Module):
 
     def forward(self, f_map):
         n, c, h, w = f_map.shape
-        y, x = ut.make_yx(h, w, n)
+        y, x = ut.make_yx(f_map, h, w, n)
         f_map2 = torch.cat((f_map, x, y), 1)
         a_map = torch.sigmoid(self.conv(f_map2))
         denom = torch.sum(a_map, (2, 3))

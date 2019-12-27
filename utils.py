@@ -1,6 +1,7 @@
 """
 Various utils.
 """
+import numpy as np
 import torch
 import matplotlib.pyplot as plt
 
@@ -23,15 +24,21 @@ def plot_tensor_image(img, typ=int):
 def n_params(model):
     return sum(p.numel() for p in model.parameters())
 
-def make_yx(h, w, n):
-    y, x = torch.meshgrid(
-        torch.arange(h, dtype=torch.float),
-        torch.arange(w, dtype=torch.float))
+def make_yx(fmap, h, w, n):
+    """
+    We include the fmap in the inputs to be able to create the x and y tensors
+    on the same device than the fmap.
+    """
+    y, x = np.meshgrid(
+        np.arange(h, dtype=float),
+        np.arange(w, dtype=float))
+    y = fmap.new_tensor(y) # requires grad is false by default
+    x = fmap.new_tensor(x)
     y = y / h
     x = x / w
     # add a dimension for batch
-    y = y.unsqueeze(0) * torch.ones((n, 1, 1))
-    x = x.unsqueeze(0) * torch.ones((n, 1, 1))
+    y = y.unsqueeze(0) * fmap.new_ones((n, 1, 1))
+    x = x.unsqueeze(0) * fmap.new_ones((n, 1, 1))
     y = y.unsqueeze(1)
     x = x.unsqueeze(1)
     return y, x

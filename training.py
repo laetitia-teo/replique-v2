@@ -36,7 +36,7 @@ imf_masked = ImageFolder('data/images', mask_transform)
 
 # we assume true and masked have the same number of indices
 indices = list(range(len(imf_true)))
-split = len(imf_true) - 1000
+split = len(imf_true) - 10
 train_indices, test_indices = indices[:split], indices[split:]
 train_sampler = SubsetRandomSampler(train_indices)
 test_sampler = SubsetRandomSampler(test_indices)
@@ -44,32 +44,43 @@ test_sampler = SubsetRandomSampler(test_indices)
 dl_true = DataLoader(
     imf_true,
     batch_size=B_SIZE,
-    shuffle=True,
     sampler=train_sampler)
 dl_true_test = DataLoader(
     imf_true,
     batch_size=B_SIZE,
-    shuffle=True,
     sampler=test_sampler)
 dl_masked = DataLoader(
     imf_masked,
     batch_size=B_SIZE,
-    shuffle=True,
     sampler=train_sampler)
 dl_masked_test = DataLoader(
     imf_masked,
     batch_size=B_SIZE,
-    shuffle=True,
     sampler=test_sampler)
 
 # metrics
 
-def compute_accuracy(dl_true, dl_masked, D):
+def compute_accuracy(dl_true, dl_masked, D, G):
+    D.cuda()
+    G.cuda()
     with torch.no_grad():
         acc = 0
-        for true_imgs, masked_imgs in zip(dl_true, dl_masked):
-
-            for img, masked in zip(true_imgs, masked_imgs)
+        for true_imgs, masked_imgs in tqdm(zip(dl_true, dl_masked)):
+            bsize = len(true_imgs)
+            a = 0
+            true_imgs = true_imgs[0]
+            masked_imgs = masked_imgs[0]
+            for img, masked in tqdm(zip(true_imgs, masked_imgs)):
+                img = img.unsqueeze(0)
+                masked = masked.unsqueeze(0)
+                if D(img) > 0.5:
+                    a += 1 / 2
+                z = torch.rand((1, z_dim, 1, 1))
+                if D(G(z, masked)) <= 0.5:
+                    a += 1 / 2
+                print('a is %s' % a)
+            acc += a / bsize
+        return acc
 
 # models
 
@@ -148,6 +159,7 @@ def trainD():
             loss2.backward()
         print('applying optimizer')
         opt_D.step()
+        opt_D.zero_grad()
 
 def trainDG():
     """
@@ -188,6 +200,9 @@ def trainDG():
         print('batch loss %s' % L)
         print('optimizer step')
         opt_D.step()
+        opt_D.zero_grad()
+    print('computing accuracies')
+    print(compute_accuracy(dl_true_test, dl_masked_test, D, G))
 
 def train_complete():
     """
@@ -211,7 +226,7 @@ def train_complete():
             j += 1
             print('computing fake image')
             with torch.no_grad():
-                z = torch.rand((1, 100, 1, 1))
+                z = torch.rand((1, z_dim, 1, 1))
                 fake_img = G(z, masked_img)
             print('done')
             print('loss1')
