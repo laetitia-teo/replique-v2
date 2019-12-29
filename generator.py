@@ -20,10 +20,9 @@ class Generator(torch.nn.Module):
     def __init__(self, zdim):
         super(Generator, self).__init__()
         self.zdim = zdim
-        self.GPU = False
 
         # define convnets
-        # this is an example, refine this, too many channels I think
+        # this is an example, refine this
         channels = [
             (self.zdim, 64, 64),
             (64, 32, 32),
@@ -40,10 +39,6 @@ class Generator(torch.nn.Module):
 
         self.convnet = GeneratorConv(channels)
 
-    def cuda(self):
-        super(Generator, self).cuda()
-        self.GPU = True
-
     def forward(self, z, img):
         """
         Arguments :
@@ -52,19 +47,10 @@ class Generator(torch.nn.Module):
         """
         n, c, h, w = img.shape
         # tile the z vector everywhere
-        f_map = torch.ones((n, self.zdim, h, w))
-        if self.GPU:
-            f_map = f_map.cuda()
+        f_map = z.new_ones((n, self.zdim, h, w))
         f_map *= z
         # x, y positions
-        y, x = ut.make_yx(h, w, n)
-        if self.GPU:
-            x = x.cuda()
-            y = y.cuda()
-        print(f_map.shape)
-        # f_map = torch.cat((f_map), 1) # should work
-        print(f_map.shape)
-        print(img.shape)
+        y, x = ut.make_yx(f_map, h, w, n)
         # process feature map with convnet
         f_map = self.convnet(f_map, img, x, y)
         f_map = (f_map + 1) * 0.5 # map to (0, 1) range

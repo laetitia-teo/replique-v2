@@ -4,6 +4,8 @@ as loading and saving models.
 """
 import os.path as op
 import torch
+import torchvision
+import matplotlib.pyplot as plt
 
 from tqdm import tqdm
 
@@ -24,13 +26,23 @@ masked_path = op.join('data', 'tensors', 'masked')
 # image folders, loads slowly, especially the masked one, use this for testing
 
 B_SIZE = 4
-z_dim = 100
-LR = 10e-3 # tune this
+z_dim = 16
+LR = 10e-4 # tune this
+
+# transforms for small-scale training
+
+def regular_transform_small(img):
+    img = torchvision.transforms.functional.resize(img, (100, 100))
+    return regular_transform(img)
+
+def mask_transform_small(img):
+    img = torchvision.transforms.functional.resize(img, (100, 100))
+    return mask_transform(img)
 
 # dataloaders
 
-imf_true = ImageFolder('data/images', regular_transform)
-imf_masked = ImageFolder('data/images', mask_transform)
+imf_true = ImageFolder('data/images', regular_transform_small)
+imf_masked = ImageFolder('data/images', mask_transform_small)
 
 # train test split
 
@@ -225,9 +237,8 @@ def train_complete():
             print('image %s' % j)
             j += 1
             print('computing fake image')
-            with torch.no_grad():
-                z = torch.rand((1, z_dim, 1, 1))
-                fake_img = G(z, masked_img)
+            z = torch.rand((1, z_dim, 1, 1))
+            fake_img = G(z, masked_img)
             print('done')
             print('loss1')
             loss = - torch.log(D(true_img))
@@ -240,4 +251,56 @@ def train_complete():
         print('optimizer step')
         opt_D.step()
 
+def train():
+    # all on cpu
+    criterion = torch.nn.BCELoss()
+    D = Discriminator()
+    G = Generator(z_dim)
+    opt_D = torch.optim.Adam(D.parameters(), lr=LR)
+    opt_G = torch.optim.Adam(G.parameters(), lr=LR)
+    fixed_zs = torch.rand((16, z_dim, 1, 1))
+    fixed_img = imf_masked[2][0].unsqueeze(0)
+    # batch counter
+    i = 0
+    for batch_true, batch_masked in zip(dl_true, dl_masked):
+        batch_true = batch_true[0]
+        batch_masked = batch_masked[0]
+        bsize = len(batch_true)
+        # optimize D
+        D.zero_grad()
+        for img_true, img_masked in zip(batch_true, batch_masked):
+            img_true = img_true.unsqueeze(0)
+            img_masked = img_masked.unsqueeze(0)
+            # compute loss of discriminator on true img
+            Dout = D(img_true)
+            lossD_true = criterion(Dout, Dout.new_ones(Dout.shape)) / bsize
+            lossD_true.backward()
+            # compute loss on fake img
+            with torch.no_grad():
+                z = torch.rand((1, z_dim, 1, 1))
+                img_fake = G(z, img_masked)
+            Dout = D(img_fake)
+            lossD_fake = criterion(Dout, Dout.new_zeros(Dout.shape)) / bsize
+            lossD_fake.backward()
+        opt_D.step()
+        # optimize G
+        G.zero_grad()
+        for img_masked in batch_masked:
+            img_masked = img_masked.unsqueeze(0)
+            z = torch.rand((1, z_dim, 1, 1))
+            fake_img = G(z, imf_masked)
+            Dout = D(fake_img)
+            lossG = criterion(Dout, Dout.new_ones(Dout.shape)) / bsize
+            lossG.backward()
+        opt_G.step()
+        # end of each batch, save some images, and models
+        with torch.no_grad():
+            for j, z in enumerate(fixed_zs):
+                img = G(z, fixed_img)
+                img = torchvision.transforms.ToPILImage()(img).convert('RGB')
+                img.save('saves/images/batch{0}_{1}.png'.format(i, j))
+            # save models
+            save_model(D, 'saves/models/D{0}.pt')
+            save_model(G, 'saves/models/G{0}.pt')
+        i += 1
 # train(1)
