@@ -7,3 +7,4 @@ scraper/quotes.json
 scraper
 images/
 saves/
+__pycache__
