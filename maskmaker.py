@@ -111,8 +111,9 @@ def several_windows(dims, param_list):
 
 def sample_params(dims):
     # height and width are the same :
-    center = np.random.randint(0, dims[0], 2)
-    sigma = np.random.randint(100, 300)
+    size = dims[0]
+    center = np.random.randint(0, size, 2)
+    sigma = np.random.randint(size/6, size/2)
     thresh = np.random.random()
     return (dims, center, sigma, thresh)
 

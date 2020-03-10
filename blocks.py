@@ -161,7 +161,8 @@ class AggBlock(torch.nn.Module):
 
     def forward(self, f_map):
         # make sure all this works
-        a_map = torch.sigmoid(f_map[:, -1, ...])
+        # a_map = torch.sigmoid(f_map[:, -1, ...])
+        a_map = f_map[:, -1, ...]
         denom = torch.sum(a_map, (2, 3))
         f_map = torch.sum(f_map[:, :-1, ...] * a_map, (2, 3))
         return f_map / denom
@@ -188,6 +189,18 @@ class AggBlockv2(torch.nn.Module):
         denom = torch.sum(a_map, (2, 3))
         f_map = torch.sum(f_map * a_map, (2, 3))
         return f_map / denom
+
+class Cut(torch.nn.Module):
+    """
+    A class for discarding a part of the input image.
+    """
+    def __init__(self, out_img_shape):
+        super(Cut, self).__init__()
+        self.outs = out_img_shape
+
+    def forward(self, f_map):
+        n, c, w, h = f_map.shape
+        return f_map[..., :(w - self.outs[0]), :(h - self.outs[1])]
 
 ### Full Nets ###
 

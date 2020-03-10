@@ -61,15 +61,19 @@ class Generator(torch.nn.Module):
 
 ### Testing ###
 
-from maskmaker import MaskMaker
+if __name__ == '__main__':
 
-def run():
-    imf = ImageFolder('data/images', mask_transform)
-    t = imf[2][0].unsqueeze(0)
-    z = torch.rand((1, 100, 1, 1))
-    gen = Generator(100)
-    gen.cuda()
-    t = t.cuda()
-    z = z.cuda()
-    img = gen(z, t)
-    ut.plot_tensor_image(img, float)
+    from maskmaker import MaskMaker
+
+    def run():
+        imf = ImageFolder('data/images', mask_transform)
+        t = imf[2][0].unsqueeze(0)
+        z = torch.rand((1, 100, 1, 1))
+        gen = Generator(100)
+        gen.cuda()
+        t = t.cuda()
+        z = z.cuda()
+        img = gen(z, t)
+        ut.plot_tensor_image(img, float)
+
+    run()

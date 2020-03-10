@@ -3,6 +3,7 @@ This module defines the training loop ans all the utilities for training, such
 as loading and saving models.
 """
 import os.path as op
+import numpy as np
 import torch
 import torchvision
 import matplotlib.pyplot as plt
@@ -25,7 +26,7 @@ masked_path = op.join('data', 'tensors', 'masked')
 
 # image folders, loads slowly, especially the masked one, use this for testing
 
-B_SIZE = 4
+B_SIZE = 32
 z_dim = 16
 LR = 10e-4 # tune this
 
@@ -41,8 +42,8 @@ def mask_transform_small(img):
 
 # dataloaders
 
-imf_true = ImageFolder('data/images', regular_transform_small)
-imf_masked = ImageFolder('data/images', mask_transform_small)
+imf_true = ImageFolder('data/images', regular_transform)
+imf_masked = ImageFolder('data/images', mask_transform)
 
 # train test split
 
@@ -107,7 +108,7 @@ def save_model(m, path):
 def load_model(m, path):
     m.load_state_dict(torch.load(path))
 
-def train(n, models=None):
+def trainv0(n, models=None):
     """
     Training loop.
 
@@ -251,6 +252,18 @@ def train_complete():
         print('optimizer step')
         opt_D.step()
 
+def save_stuff(fixed_zs, fixed_imgs, D, G, i):
+    with torch.no_grad():
+        for j in range(len(fixed_imgs)):
+            z = fixed_zs[j]
+            fixed_img = fixed_imgs[j]
+            img = G(z, fixed_img).squeeze() # batch is only one image anyway
+            img = torchvision.transforms.ToPILImage()(img).convert('RGB')
+            img.save('saves/images/batch{0}_{1}.png'.format(i, j))
+        # save models
+        save_model(D, 'saves/models/D{0}.pt'.format(i))
+        save_model(G, 'saves/models/G{0}.pt'.format(i))
+
 def train():
     # all on cpu
     criterion = torch.nn.BCELoss()
@@ -259,15 +272,25 @@ def train():
     opt_D = torch.optim.Adam(D.parameters(), lr=LR)
     opt_G = torch.optim.Adam(G.parameters(), lr=LR)
     fixed_zs = torch.rand((16, z_dim, 1, 1))
-    fixed_img = imf_masked[2][0].unsqueeze(0)
+    fixed_imgs = [
+        imf_masked[l][0].unsqueeze(0) for l in np.random.choice(
+            range(len(dl_true)), 
+            16)]
+    # losses for each batch
+    ld = []
+    lg = []
     # batch counter
     i = 0
     for batch_true, batch_masked in zip(dl_true, dl_masked):
+        if i % 10:
+            save_stuff(fixed_zs, fixed_imgs, D, G, i)
         batch_true = batch_true[0]
         batch_masked = batch_masked[0]
         bsize = len(batch_true)
         # optimize D
         D.zero_grad()
+        ld.append(0)
+        lg.append(0)
         for img_true, img_masked in zip(batch_true, batch_masked):
             img_true = img_true.unsqueeze(0)
             img_masked = img_masked.unsqueeze(0)
@@ -275,6 +298,7 @@ def train():
             Dout = D(img_true)
             lossD_true = criterion(Dout, Dout.new_ones(Dout.shape)) / bsize
             lossD_true.backward()
+            ld[i] += lossD_true.item()
             # compute loss on fake img
             with torch.no_grad():
                 z = torch.rand((1, z_dim, 1, 1))
@@ -282,25 +306,21 @@ def train():
             Dout = D(img_fake)
             lossD_fake = criterion(Dout, Dout.new_zeros(Dout.shape)) / bsize
             lossD_fake.backward()
+            ld[i] += lossD_fake.item()
         opt_D.step()
         # optimize G
         G.zero_grad()
         for img_masked in batch_masked:
             img_masked = img_masked.unsqueeze(0)
             z = torch.rand((1, z_dim, 1, 1))
-            fake_img = G(z, imf_masked)
+            fake_img = G(z, img_masked)
             Dout = D(fake_img)
             lossG = criterion(Dout, Dout.new_ones(Dout.shape)) / bsize
             lossG.backward()
+            lg[i] += lossG.item()
         opt_G.step()
         # end of each batch, save some images, and models
-        with torch.no_grad():
-            for j, z in enumerate(fixed_zs):
-                img = G(z, fixed_img)
-                img = torchvision.transforms.ToPILImage()(img).convert('RGB')
-                img.save('saves/images/batch{0}_{1}.png'.format(i, j))
-            # save models
-            save_model(D, 'saves/models/D{0}.pt')
-            save_model(G, 'saves/models/G{0}.pt')
         i += 1
-# train(1)
+
+if __name__ == '__main__':
+    train()

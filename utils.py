@@ -24,7 +24,7 @@ def plot_tensor_image(img, typ=int):
 def n_params(model):
     return sum(p.numel() for p in model.parameters())
 
-def make_yx(fmap, h, w, n):
+def _make_yx(fmap, h, w, n):
     """
     We include the fmap in the inputs to be able to create the x and y tensors
     on the same device than the fmap.
@@ -42,3 +42,12 @@ def make_yx(fmap, h, w, n):
     y = y.unsqueeze(1)
     x = x.unsqueeze(1)
     return y, x
+
+def make_yx(fmap, h, w, n):
+    """
+    We include the fmap in the inputs to be able to create the x and y tensors
+    on the same device than the fmap.
+    """
+    d = fmap.device()
+    y, x = torch.meshgrid(
+        torch.arange(h))
